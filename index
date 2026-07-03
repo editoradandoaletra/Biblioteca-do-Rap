@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Biblioteca do Rap — Acervo Nacional de Discos</title>
+<meta name="description" content="Banco de dados colaborativo de discos de rap do Brasil.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+<style>
+/* ============================================================
+   TOKENS
+   ============================================================ */
+:root{
+  --bg:            #0c0c0c;
+  --bg-card:       #161615;
+  --bg-card-alt:   #1e1e1c;
+  --bg-input:      #121211;
+  --border:        #2c2b27;
+  --gold:          #f2b705;
+  --gold-dim:      #a67d05;
+  --red:           #e63950;
+  --green:         #3cb371;
+  --off-white:     #f0ede4;
+  --grey:          #8f8b80;
+  --grey-dim:      #5c584f;
+  --radius:        4px;
+  --display: "Bebas Neue", sans-serif;
+  --body:    "Space Grotesk", sans-serif;
+  --mono:    "Space Mono", monospace;
+}
+
+*{ box-sizing:border-box; }
+html{ scroll-behavior:smooth; }
+body{
+  margin:0;
+  background:
+    radial-gradient(ellipse at 15% -10%, rgba(242,183,5,0.08), transparent 45%),
+    radial-gradient(ellipse at 100% 0%, rgba(230,57,80,0.06), transparent 40%),
+    var(--bg);
+  color:var(--off-white);
+  font-family:var(--body);
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{ background:var(--gold); color:#000; }
+:focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
+
+h1,h2,h3{ font-family:var(--display); letter-spacing:.03em; margin:0; text-transform:uppercase; }
+a{ color:var(--gold); }
+
+/* ============================================================
+   LAYOUT SHELL
+   ============================================================ */
+.wrap{ max-width:1180px; margin:0 auto; padding:0 20px; }
+
+.topbar{
+  border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+  position:sticky; top:0; z-index:40;
+  backdrop-filter:blur(10px);
+}
+.topbar-inner{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:18px 20px; max-width:1180px; margin:0 auto; gap:24px; flex-wrap:wrap;
+}
+.brand{ display:flex; align-items:center; gap:14px; }
+.brand-disc{ width:40px; height:40px; flex-shrink:0; }
+.brand h1{ font-size:26px; line-height:.9; color:var(--off-white); position:relative; }
+.brand h1 em{ font-style:normal; color:var(--gold); display:block; font-size:15px; letter-spacing:.28em; }
+.brand-underline{ display:block; width:120px; margin-top:2px; }
+
+.tabs{ display:flex; gap:6px; background:var(--bg-card); border:1px solid var(--border); border-radius:999px; padding:4px; }
+.tab{
+  font-family:var(--mono); font-size:12px; letter-spacing:.06em; font-weight:700;
+  color:var(--grey); background:transparent; border:none; border-radius:999px;
+  padding:10px 16px; cursor:pointer; transition:.18s ease;
+  text-transform:uppercase;
+}
+.tab:hover{ color:var(--off-white); }
+.tab.active{ background:var(--gold); color:#141200; }
+
+main{ max-width:1180px; margin:0 auto; padding:36px 20px 80px; }
+.tab-panel{ display:none; animation:fadein .35s ease; }
+.tab-panel.active{ display:block; }
+@keyframes fadein{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
+
+.card{
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:28px;
+}
+
+.eyebrow{ font-family:var(--mono); font-size:12px; color:var(--gold); letter-spacing:.15em; text-transform:uppercase; margin:0 0 6px; }
+.subtitle{ color:var(--grey); font-size:14px; margin:6px 0 28px; max-width:520px; }
+
+/* ============================================================
+   CADASTRO / FORM
+   ============================================================ */
+.form-card{ max-width:640px; margin:0 auto; }
+.form-card h2{ font-size:34px; }
+
+#form-disco .field{ margin-bottom:18px; }
+#form-disco .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+label{
+  display:block; font-family:var(--mono); font-size:11px; color:var(--grey);
+  letter-spacing:.1em; margin-bottom:7px; text-transform:uppercase;
+}
+label b{ color:var(--gold); }
+
+input[type=text], input[type=number], input[type=url], select{
+  width:100%; background:var(--bg-input); border:1px solid var(--border);
+  color:var(--off-white); border-radius:var(--radius); padding:13px 14px;
+  font-family:var(--body); font-size:15px; transition:border-color .15s;
+}
+input:focus, select:focus{ border-color:var(--gold); }
+input.invalid{ border-color:var(--red); }
+input::placeholder{ color:var(--grey-dim); }
+select{ appearance:none; background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6"><path d="M0 0l5 6 5-6z" fill="%238f8b80"/></svg>'); background-repeat:no-repeat; background-position:right 14px center; padding-right:32px; }
+
+#yt-preview{ margin-top:10px; display:none; align-items:center; gap:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); padding:8px; }
+#yt-preview.show{ display:flex; }
+#yt-preview img{ width:80px; border-radius:2px; display:block; }
+#yt-preview span{ font-family:var(--mono); font-size:11px; color:var(--green); }
+
+.btn-primary{
+  width:100%; margin-top:8px; background:var(--gold); color:#141200; border:none;
+  font-family:var(--mono); font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  font-size:14px; padding:16px; border-radius:var(--radius); cursor:pointer; transition:.15s;
+}
+.btn-primary:hover{ background:#ffcc22; }
+.btn-primary:disabled{ background:var(--grey-dim); cursor:not-allowed; }
+
+.btn-ghost{
+  background:transparent; border:1px solid var(--border); color:var(--off-white);
+  font-family:var(--mono); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+  padding:10px 14px; border-radius:var(--radius); cursor:pointer;
+}
+.btn-ghost:hover{ border-color:var(--gold); color:var(--gold); }
+
+#form-msg{ margin-top:16px; font-family:var(--mono); font-size:13px; text-align:center; min-height:18px; }
+#form-msg.ok{ color:var(--green); }
+#form-msg.err{ color:var(--red); }
+
+/* modal */
+.modal{ position:fixed; inset:0; background:rgba(0,0,0,.72); display:flex; align-items:center; justify-content:center; z-index:100; padding:20px; }
+.modal.hidden{ display:none; }
+.modal-content{ background:var(--bg-card); border:1px solid var(--gold); border-radius:var(--radius); max-width:480px; width:100%; padding:26px; }
+.modal-content h3{ font-size:22px; color:var(--gold); margin-bottom:12px; }
+.modal-content ul{ list-style:none; padding:0; margin:0 0 14px; font-family:var(--mono); font-size:13px; }
+.modal-content li{ border-bottom:1px solid var(--border); padding:10px 0; color:var(--off-white); }
+.modal-content li span{ color:var(--grey); display:block; font-size:11px; }
+.modal-content p{ color:var(--grey); font-size:13px; }
+.modal-actions{ display:flex; gap:10px; margin-top:16px; }
+.modal-actions button{ flex:1; }
+
+/* ============================================================
+   ACERVO / TABLE
+   ============================================================ */
+.filters-bar{
+  display:flex; gap:10px; flex-wrap:wrap; margin-bottom:22px;
+  background:var(--bg-card); border:1px solid var(--border); padding:14px; border-radius:var(--radius);
+}
+.filters-bar input, .filters-bar select{ width:auto; flex:1; min-width:160px; }
+.filters-bar select{ padding-right:32px; }
+
+.table-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius); }
+table{ width:100%; border-collapse:collapse; min-width:760px; }
+thead th{
+  text-align:left; font-family:var(--mono); font-size:11px; letter-spacing:.08em; color:var(--gold);
+  text-transform:uppercase; padding:14px 16px; border-bottom:1px solid var(--border); background:var(--bg-card-alt);
+  white-space:nowrap; cursor:pointer; user-select:none;
+}
+thead th:hover{ color:#ffcc22; }
+tbody td{ padding:14px 16px; border-bottom:1px solid var(--border); font-size:14px; vertical-align:middle; }
+tbody tr:hover{ background:rgba(242,183,5,0.04); }
+tbody tr:last-child td{ border-bottom:none; }
+.cell-album{ font-weight:700; }
+.cell-sub{ color:var(--grey); font-size:12px; }
+.tag-uf{ font-family:var(--mono); font-size:11px; background:var(--bg-card-alt); border:1px solid var(--border); padding:2px 7px; border-radius:999px; color:var(--gold); }
+.yt-link{ display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:12px; color:var(--red); text-decoration:none; }
+.yt-link:hover{ text-decoration:underline; }
+#acervo-count{ font-family:var(--mono); font-size:12px; color:var(--grey); margin-top:14px; }
+.empty-state{ text-align:center; padding:60px 20px; color:var(--grey); font-family:var(--mono); font-size:13px; }
+
+/* ============================================================
+   PAINEL / DASHBOARD
+   ============================================================ */
+.stats-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px; }
+.stat-card{ background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:20px; text-align:center; }
+.stat-num{ display:block; font-family:var(--mono); font-weight:700; font-size:30px; color:var(--gold); }
+.stat-label{ display:block; font-size:11px; letter-spacing:.08em; color:var(--grey); text-transform:uppercase; margin-top:6px; }
+
+.panel-grid{ display:grid; grid-template-columns:1.3fr 1fr; gap:16px; }
+.panel-grid .card h3{ font-size:16px; letter-spacing:.1em; color:var(--grey); margin-bottom:16px; }
+.map-card{ position:relative; }
+#mapa-brasil{ width:100%; height:auto; display:block; }
+.hex{ stroke:var(--bg); stroke-width:2; cursor:pointer; transition:opacity .15s; }
+.hex:hover{ opacity:.8; }
+.hex-label{ font-family:var(--mono); font-size:11px; fill:var(--off-white); pointer-events:none; font-weight:700; }
+.hex-count{ font-family:var(--mono); font-size:9px; fill:var(--grey); pointer-events:none; }
+.tooltip{
+  position:absolute; background:#000; border:1px solid var(--gold); border-radius:3px;
+  padding:8px 12px; font-family:var(--mono); font-size:12px; pointer-events:none; z-index:20;
+  white-space:nowrap;
+}
+.tooltip.hidden{ display:none; }
+.tooltip b{ color:var(--gold); }
+
+.legend{ display:flex; align-items:center; gap:8px; margin-top:14px; font-family:var(--mono); font-size:10px; color:var(--grey); }
+.legend-bar{ flex:1; height:8px; border-radius:4px; background:linear-gradient(90deg, #232320, var(--gold)); }
+
+@media (max-width: 860px){
+  .panel-grid{ grid-template-columns:1fr; }
+  .stats-row{ grid-template-columns:1fr 1fr; }
+  #form-disco .field-row{ grid-template-columns:1fr; }
+}
+@media (max-width: 560px){
+  .topbar-inner{ flex-direction:column; align-items:flex-start; }
+  .tabs{ width:100%; justify-content:space-between; }
+  .stats-row{ grid-template-columns:1fr 1fr; }
+}
+
+footer{ border-top:1px solid var(--border); padding:26px 20px; text-align:center; color:var(--grey-dim); font-family:var(--mono); font-size:11px; letter-spacing:.05em; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <svg class="brand-disc" viewBox="0 0 40 40">
+        <circle cx="20" cy="20" r="19" fill="#141311" stroke="var(--gold)" stroke-width="1.5"/>
+        <circle cx="20" cy="20" r="13" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <circle cx="20" cy="20" r="9" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <circle cx="20" cy="20" r="4" fill="var(--gold)"/>
+      </svg>
+      <h1>BIBLIOTECA<em>DO RAP</em>
+        <svg class="brand-underline" viewBox="0 0 120 10" preserveAspectRatio="none">
+          <path d="M1 6 Q 20 1, 40 5 T 80 4 T 119 6" fill="none" stroke="var(--red)" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+      </h1>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="cadastro">01 · CATALOGAR</button>
+      <button class="tab" data-tab="acervo">02 · ACERVO</button>
+      <button class="tab" data-tab="painel">03 · PAINEL</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ============ TAB 1 — CADASTRO ============ -->
+  <section id="tab-cadastro" class="tab-panel active">
+    <div class="card form-card">
+      <p class="eyebrow">Faixa 01</p>
+      <h2>Ficha de Catalogação</h2>
+      <p class="subtitle">Registre um disco no acervo nacional. Tudo entra em <b style="color:var(--gold)">CAIXA ALTA</b> automaticamente — não se preocupe com formatação.</p>
+
+      <form id="form-disco" novalidate>
+        <div class="field">
+          <label>01 · Nome do Álbum</label>
+          <input type="text" id="f-album" placeholder="EX: SOBREVIVENDO NO INFERNO" required>
+        </div>
+        <div class="field">
+          <label>02 · Artista</label>
+          <input type="text" id="f-artista" placeholder="EX: RACIONAIS MC'S" required>
+        </div>
+        <div class="field">
+          <label>03 · Produtor</label>
+          <input type="text" id="f-produtor" placeholder="EX: KL JAY" required>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>04 · Ano</label>
+            <input type="number" id="f-ano" min="1970" max="2026" placeholder="1997" required>
+          </div>
+          <div class="field">
+            <label>05 · Estado</label>
+            <select id="f-estado" required>
+              <option value="" disabled selected>SELECIONE</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>06 · Cidade</label>
+          <input type="text" id="f-cidade" list="cidades-list" placeholder="EX: SÃO PAULO" required autocomplete="off">
+          <datalist id="cidades-list"></datalist>
+        </div>
+        <div class="field">
+          <label>07 · Link do YouTube</label>
+          <input type="url" id="f-youtube" placeholder="https://www.youtube.com/watch?v=..." required>
+          <div id="yt-preview"><img id="yt-thumb" src="" alt=""><span id="yt-status">VÍDEO ENCONTRADO</span></div>
+        </div>
+        <button type="submit" class="btn-primary" id="btn-submit">Cadastrar Disco</button>
+      </form>
+      <div id="form-msg"></div>
+    </div>
+  </section>
+
+  <!-- ============ TAB 2 — ACERVO ============ -->
+  <section id="tab-acervo" class="tab-panel">
+    <p class="eyebrow">Faixa 02</p>
+    <h2 style="font-size:34px; margin-bottom:22px;">Acervo Completo</h2>
+
+    <div class="filters-bar">
+      <input type="text" id="filtro-busca" placeholder="BUSCAR POR ÁLBUM OU ARTISTA...">
+      <select id="filtro-estado"><option value="">TODOS OS ESTADOS</option></select>
+      <select id="filtro-ano"><option value="">TODOS OS ANOS</option></select>
+      <button class="btn-ghost" id="filtro-limpar">LIMPAR FILTROS</button>
+    </div>
+
+    <div class="table-wrap">
+      <table id="tabela-acervo">
+        <thead>
+          <tr>
+            <th data-key="album">Álbum</th>
+            <th data-key="artista">Artista</th>
+            <th data-key="produtor">Produtor</th>
+            <th data-key="ano">Ano</th>
+            <th data-key="cidade">Cidade / UF</th>
+            <th>Vídeo</th>
+          </tr>
+        </thead>
+        <tbody id="tabela-body"></tbody>
+      </table>
+    </div>
+    <p id="acervo-count"></p>
+  </section>
+
+  <!-- ============ TAB 3 — PAINEL ============ -->
+  <section id="tab-painel" class="tab-panel">
+    <p class="eyebrow">Faixa 03</p>
+    <h2 style="font-size:34px; margin-bottom:22px;">Painel do Acervo</h2>
+
+    <div class="stats-row">
+      <div class="stat-card"><span class="stat-num" id="stat-total">—</span><span class="stat-label">Discos Catalogados</span></div>
+      <div class="stat-card"><span class="stat-num" id="stat-artistas">—</span><span class="stat-label">Artistas</span></div>
+      <div class="stat-card"><span class="stat-num" id="stat-estados">—</span><span class="stat-label">Estados Representados</span></div>
+      <div class="stat-card"><span class="stat-num" id="stat-cidade-top" style="font-size:18px;">—</span><span class="stat-label">Cidade Com Mais Discos</span></div>
+    </div>
+
+    <div class="panel-grid">
+      <div class="card map-card">
+        <h3>Discos por Estado</h3>
+        <svg id="mapa-brasil" viewBox="0 0 560 480"></svg>
+        <div class="legend"><span>0</span><div class="legend-bar"></div><span id="legend-max">MAX</span></div>
+        <div class="tooltip hidden" id="mapa-tooltip"></div>
+      </div>
+      <div class="card chart-card">
+        <h3>Discos por Ano</h3>
+        <canvas id="chart-ano" height="260"></canvas>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  BIBLIOTECA DO RAP — ACERVO COLABORATIVO MANTIDO PELA COMUNIDADE · DADOS ABERTOS PARA PESQUISA
+</footer>
+
+<!-- ===== modal de possível duplicata ===== -->
+<div class="modal hidden" id="modal-dup">
+  <div class="modal-content">
+    <h3>⚠ Já existe algo parecido</h3>
+    <ul id="dup-list"></ul>
+    <p>Confere se não é o mesmo disco cadastrado com outra grafia antes de continuar.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="dup-cancel">CANCELAR</button>
+      <button class="btn-primary" id="dup-confirm" style="margin-top:0;">CADASTRAR MESMO ASSIM</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIGURAÇÃO DO SUPABASE
+   Troque pelos dados do seu projeto (Project Settings > API)
+   ============================================================ */
+const SUPABASE_URL = "COLOQUE_SUA_SUPABASE_URL_AQUI";
+const SUPABASE_ANON_KEY = "COLOQUE_SUA_SUPABASE_ANON_KEY_AQUI";
+const TABLE = "discos";
+
+const supabase = (SUPABASE_URL.startsWith("http"))
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+if(!supabase){
+  console.warn("Supabase não configurado. Edite SUPABASE_URL e SUPABASE_ANON_KEY no <script> do index.html.");
+}
+
+/* ============================================================
+   ESTADOS (UF, nome, posição no mapa hex — col/row aproximados)
+   ============================================================ */
+const ESTADOS = [
+  {uf:"AC", nome:"Acre",                 col:0,  row:2},
+  {uf:"AL", nome:"Alagoas",              col:11, row:4},
+  {uf:"AP", nome:"Amapá",                col:6,  row:0},
+  {uf:"AM", nome:"Amazonas",             col:1,  row:1},
+  {uf:"BA", nome:"Bahia",                col:9,  row:3},
+  {uf:"CE", nome:"Ceará",                col:10, row:1},
+  {uf:"DF", nome:"Distrito Federal",     col:7,  row:3},
+  {uf:"ES", nome:"Espírito Santo",       col:9,  row:5},
+  {uf:"GO", nome:"Goiás",                col:6,  row:4},
+  {uf:"MA", nome:"Maranhão",             col:8,  row:1},
+  {uf:"MT", nome:"Mato Grosso",          col:3,  row:3},
+  {uf:"MS", nome:"Mato Grosso do Sul",   col:3,  row:5},
+  {uf:"MG", nome:"Minas Gerais",         col:7,  row:5},
+  {uf:"PA", nome:"Pará",                 col:5,  row:1},
+  {uf:"PB", nome:"Paraíba",              col:11, row:3},
+  {uf:"PR", nome:"Paraná",               col:5,  row:7},
+  {uf:"PE", nome:"Pernambuco",           col:10, row:4},
+  {uf:"PI", nome:"Piauí",                col:8,  row:2},
+  {uf:"RJ", nome:"Rio de Janeiro",       col:8,  row:6},
+  {uf:"RN", nome:"Rio Grande do Norte",  col:11, row:2},
+  {uf:"RS", nome:"Rio Grande do Sul",    col:4,  row:9},
+  {uf:"RO", nome:"Rondônia",             col:2,  row:2},
+  {uf:"RR", nome:"Roraima",              col:3,  row:0},
+  {uf:"SC", nome:"Santa Catarina",       col:5,  row:8},
+  {uf:"SP", nome:"São Paulo",            col:6,  row:6},
+  {uf:"SE", nome:"Sergipe",              col:10, row:5},
+  {uf:"TO", nome:"Tocantins",            col:6,  row:2},
+];
+
+/* ============================================================
+   ESTADO GLOBAL
+   ============================================================ */
+let allRecords = [];
+let pendingRecord = null;
+let chartAno = null;
+let sortState = { key:"created_at", dir:"desc" };
+
+/* ============================================================
+   HELPERS DE TEXTO / NORMALIZAÇÃO
+   ============================================================ */
+function normalize(str){
+  return str.trim().replace(/\s+/g," ").toUpperCase();
+}
+
+function levenshtein(a, b){
+  const dp = Array.from({length:a.length+1}, (_,i)=>[i, ...new Array(b.length).fill(0)]);
+  for(let j=0;j<=b.length;j++) dp[0][j]=j;
+  for(let i=1;i<=a.length;i++){
+    for(let j=1;j<=b.length;j++){
+      dp[i][j] = Math.min(
+        dp[i-1][j]+1,
+        dp[i][j-1]+1,
+        dp[i-1][j-1] + (a[i-1]===b[j-1] ? 0 : 1)
+      );
+    }
+  }
+  return dp[a.length][b.length];
+}
+function similarity(a, b){
+  if(!a && !b) return 1;
+  if(!a || !b) return 0;
+  const dist = levenshtein(a, b);
+  return 1 - dist / Math.max(a.length, b.length);
+}
+
+function getYoutubeId(url){
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+/* ============================================================
+   INICIALIZAÇÃO DE SELECTS
+   ============================================================ */
+function popularSelectsDeEstado(){
+  const ordenado = [...ESTADOS].sort((a,b)=>a.nome.localeCompare(b.nome, "pt-BR"));
+  const selForm = document.getElementById("f-estado");
+  const selFiltro = document.getElementById("filtro-estado");
+  ordenado.forEach(e=>{
+    const opt1 = document.createElement("option");
+    opt1.value = e.uf; opt1.textContent = `${e.nome} (${e.uf})`;
+    selForm.appendChild(opt1);
+
+    const opt2 = document.createElement("option");
+    opt2.value = e.uf; opt2.textContent = `${e.nome} (${e.uf})`;
+    selFiltro.appendChild(opt2);
+  });
+}
+
+/* ============================================================
+   CADASTRO — validação do link do youtube
+   ============================================================ */
+const inputYoutube = document.getElementById("f-youtube");
+const ytPreview = document.getElementById("yt-preview");
+const ytThumb = document.getElementById("yt-thumb");
+const ytStatus = document.getElementById("yt-status");
+
+inputYoutube.addEventListener("input", ()=>{
+  const id = getYoutubeId(inputYoutube.value.trim());
+  if(id){
+    inputYoutube.classList.remove("invalid");
+    ytThumb.src = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+    ytStatus.textContent = "VÍDEO ENCONTRADO";
+    ytStatus.style.color = "var(--green)";
+    ytPreview.classList.add("show");
+  } else {
+    ytPreview.classList.remove("show");
+    if(inputYoutube.value.trim().length > 5) inputYoutube.classList.add("invalid");
+    else inputYoutube.classList.remove("invalid");
+  }
+});
+
+/* ============================================================
+   CADASTRO — envio do formulário
+   ============================================================ */
+const form = document.getElementById("form-disco");
+const btnSubmit = document.getElementById("btn-submit");
+const formMsg = document.getElementById("form-msg");
+
+form.addEventListener("submit", async (e)=>{
+  e.preventDefault();
+  formMsg.textContent = ""; formMsg.className = "";
+
+  const youtubeUrl = document.getElementById("f-youtube").value.trim();
+  const youtubeId = getYoutubeId(youtubeUrl);
+  if(!youtubeId){
+    inputYoutube.classList.add("invalid");
+    formMsg.textContent = "Cola um link válido do YouTube (watch, youtu.be ou shorts).";
+    formMsg.className = "err";
+    return;
+  }
+
+  const record = {
+    album:    normalize(document.getElementById("f-album").value),
+    artista:  normalize(document.getElementById("f-artista").value),
+    produtor: normalize(document.getElementById("f-produtor").value),
+    ano:      parseInt(document.getElementById("f-ano").value, 10),
+    cidade:   normalize(document.getElementById("f-cidade").value),
+    estado:   document.getElementById("f-estado").value,
+    youtube_id: youtubeId,
+    youtube_url: youtubeUrl,
+  };
+
+  if(!record.album || !record.artista || !record.produtor || !record.cidade || !record.estado || !record.ano){
+    formMsg.textContent = "Preenche todos os campos antes de cadastrar.";
+    formMsg.className = "err";
+    return;
+  }
+
+  const duplicatas = encontrarPossiveisDuplicatas(record);
+  if(duplicatas.length){
+    pendingRecord = record;
+    abrirModalDuplicatas(duplicatas);
+    return;
+  }
+
+  await salvarDisco(record);
+});
+
+function encontrarPossiveisDuplicatas(record){
+  return allRecords
+    .map(r=>{
+      const sim = 0.5*similarity(record.album, r.album) + 0.5*similarity(record.artista, r.artista);
+      return {r, sim};
+    })
+    .filter(x=>x.sim > 0.82)
+    .sort((a,b)=>b.sim-a.sim)
+    .slice(0,4)
+    .map(x=>x.r);
+}
+
+async function salvarDisco(record){
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = "CADASTRANDO...";
+
+  if(!supabase){
+    formMsg.textContent = "Supabase não configurado — veja o comentário no topo do <script>.";
+    formMsg.className = "err";
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = "Cadastrar Disco";
+    return;
+  }
+
+  const { error } = await supabase.from(TABLE).insert([record]);
+
+  btnSubmit.disabled = false;
+  btnSubmit.textContent = "Cadastrar Disco";
+
+  if(error){
+    formMsg.textContent = "Deu ruim ao salvar: " + error.message;
+    formMsg.className = "err";
+    return;
+  }
+
+  formMsg.textContent = `"${record.album}" cadastrado no acervo com sucesso!`;
+  formMsg.className = "ok";
+  form.reset();
+  ytPreview.classList.remove("show");
+  await carregarTudo();
+}
+
+/* modal de duplicata */
+const modalDup = document.getElementById("modal-dup");
+const dupList = document.getElementById("dup-list");
+document.getElementById("dup-cancel").addEventListener("click", ()=>{
+  modalDup.classList.add("hidden");
+  pendingRecord = null;
+});
+document.getElementById("dup-confirm").addEventListener("click", async ()=>{
+  modalDup.classList.add("hidden");
+  if(pendingRecord){
+    await salvarDisco(pendingRecord);
+    pendingRecord = null;
+  }
+});
+function abrirModalDuplicatas(lista){
+  dupList.innerHTML = lista.map(r => `
+    <li>${r.album} <span>${r.artista} · ${r.ano} · ${r.cidade}/${r.estado}</span></li>
+  `).join("");
+  modalDup.classList.remove("hidden");
+}
+
+/* ============================================================
+   ABAS
+   ============================================================ */
+document.querySelectorAll(".tab").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p=>p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("tab-"+btn.dataset.tab).classList.add("active");
+  });
+});
+
+/* ============================================================
+   ACERVO — filtros, ordenação e tabela
+   ============================================================ */
+const filtroBusca = document.getElementById("filtro-busca");
+const filtroEstado = document.getElementById("filtro-estado");
+const filtroAno = document.getElementById("filtro-ano");
+document.getElementById("filtro-limpar").addEventListener("click", ()=>{
+  filtroBusca.value = ""; filtroEstado.value = ""; filtroAno.value = "";
+  renderTabela();
+});
+[filtroBusca, filtroEstado, filtroAno].forEach(el=> el.addEventListener("input", renderTabela));
+
+document.querySelectorAll("#tabela-acervo thead th[data-key]").forEach(th=>{
+  th.addEventListener("click", ()=>{
+    const key = th.dataset.key;
+    sortState.dir = (sortState.key === key && sortState.dir === "asc") ? "desc" : "asc";
+    sortState.key = key;
+    renderTabela();
+  });
+});
+
+function popularFiltroAno(){
+  const anos = [...new Set(allRecords.map(r=>r.ano))].sort((a,b)=>b-a);
+  filtroAno.innerHTML = `<option value="">TODOS OS ANOS</option>` + anos.map(a=>`<option value="${a}">${a}</option>`).join("");
+}
+
+function renderTabela(){
+  let dados = [...allRecords];
+
+  const busca = normalize(filtroBusca.value);
+  if(busca) dados = dados.filter(r => r.album.includes(busca) || r.artista.includes(busca));
+  if(filtroEstado.value) dados = dados.filter(r => r.estado === filtroEstado.value);
+  if(filtroAno.value) dados = dados.filter(r => String(r.ano) === filtroAno.value);
+
+  dados.sort((a,b)=>{
+    let va = a[sortState.key], vb = b[sortState.key];
+    if(typeof va === "string") { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+    if(va < vb) return sortState.dir === "asc" ? -1 : 1;
+    if(va > vb) return sortState.dir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const body = document.getElementById("tabela-body");
+  if(!dados.length){
+    body.innerHTML = `<tr><td colspan="6"><div class="empty-state">NENHUM DISCO ENCONTRADO COM ESSES FILTROS</div></td></tr>`;
+  } else {
+    body.innerHTML = dados.map(r => `
+      <tr>
+        <td class="cell-album">${r.album}</td>
+        <td>${r.artista}</td>
+        <td>${r.produtor}</td>
+        <td>${r.ano}</td>
+        <td>${r.cidade} <span class="tag-uf">${r.estado}</span></td>
+        <td><a class="yt-link" href="${r.youtube_url}" target="_blank" rel="noopener">▶ ASSISTIR</a></td>
+      </tr>
+    `).join("");
+  }
+  document.getElementById("acervo-count").textContent = `${dados.length} DISCO${dados.length===1?"":"S"} EXIBIDO${dados.length===1?"":"S"} DE ${allRecords.length} NO ACERVO`;
+}
+
+/* ============================================================
+   CIDADES — sugestões (datalist)
+   ============================================================ */
+function popularCidades(){
+  const dl = document.getElementById("cidades-list");
+  const cidades = [...new Set(allRecords.map(r=>r.cidade))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  dl.innerHTML = cidades.map(c=>`<option value="${c}">`).join("");
+}
+
+/* ============================================================
+   PAINEL — estatísticas
+   ============================================================ */
+function renderStats(){
+  const total = allRecords.length;
+  const artistas = new Set(allRecords.map(r=>r.artista)).size;
+  const estados = new Set(allRecords.map(r=>r.estado)).size;
+
+  const contagemCidade = {};
+  allRecords.forEach(r=>{
+    const chave = `${r.cidade}/${r.estado}`;
+    contagemCidade[chave] = (contagemCidade[chave]||0)+1;
+  });
+  let cidadeTop = "—";
+  let max = 0;
+  Object.entries(contagemCidade).forEach(([c,n])=>{ if(n>max){ max=n; cidadeTop=c; } });
+
+  document.getElementById("stat-total").textContent = total;
+  document.getElementById("stat-artistas").textContent = artistas;
+  document.getElementById("stat-estados").textContent = estados;
+  document.getElementById("stat-cidade-top").textContent = cidadeTop;
+}
+
+/* ============================================================
+   PAINEL — mapa hexagonal do Brasil
+   ============================================================ */
+const HEX_SIZE = 27;
+const HEX_W = HEX_SIZE * Math.sqrt(3);
+const HEX_H = HEX_SIZE * 2;
+const PAD = 34;
+
+function hexCenter(col, row){
+  const x = col * HEX_W + (row % 2 ? HEX_W/2 : 0) + PAD;
+  const y = row * HEX_H * 0.75 + PAD;
+  return {x, y};
+}
+function hexPoints(cx, cy, r){
+  const pts = [];
+  for(let i=0;i<6;i++){
+    const angle = Math.PI/180 * (60*i - 30);
+    pts.push(`${(cx + r*Math.cos(angle)).toFixed(1)},${(cy + r*Math.sin(angle)).toFixed(1)}`);
+  }
+  return pts.join(" ");
+}
+function corPorContagem(n, max){
+  if(n === 0) return "#1e1e1c";
+  const t = max > 0 ? n / max : 0;
+  // interpola de dourado escuro -> dourado -> vermelho
+  const from = [90, 66, 10];   // ~ dourado escuro
+  const to   = [230, 57, 80];  // vermelho
+  const mix = [0,1,2].map(i => Math.round(from[i] + (to[i]-from[i]) * t));
+  return `rgb(${mix.join(",")})`;
+}
+
+const tooltip = document.getElementById("mapa-tooltip");
+const mapaSvg = document.getElementById("mapa-brasil");
+
+function renderMapa(){
+  const contagem = {};
+  ESTADOS.forEach(e => contagem[e.uf] = 0);
+  allRecords.forEach(r => { if(contagem[r.estado] !== undefined) contagem[r.estado]++; });
+  const max = Math.max(0, ...Object.values(contagem));
+  document.getElementById("legend-max").textContent = max;
+
+  mapaSvg.innerHTML = "";
+  ESTADOS.forEach(e=>{
+    const {x,y} = hexCenter(e.col, e.row);
+    const n = contagem[e.uf];
+    const cor = corPorContagem(n, max);
+
+    const poly = document.createElementNS("http://www.w3.org/2000/svg","polygon");
+    poly.setAttribute("points", hexPoints(x, y, HEX_SIZE-2));
+    poly.setAttribute("fill", cor);
+    poly.setAttribute("class", "hex");
+    poly.addEventListener("mousemove", (evt)=>{
+      const rect = mapaSvg.getBoundingClientRect();
+      tooltip.innerHTML = `<b>${e.nome} (${e.uf})</b><br>${n} disco${n===1?"":"s"} catalogado${n===1?"":"s"}`;
+      tooltip.style.left = (evt.clientX - rect.left + 14) + "px";
+      tooltip.style.top = (evt.clientY - rect.top + 10) + "px";
+      tooltip.classList.remove("hidden");
+    });
+    poly.addEventListener("mouseleave", ()=> tooltip.classList.add("hidden"));
+    poly.addEventListener("click", ()=>{
+      // atalho: manda pro acervo já filtrado por esse estado
+      filtroEstado.value = e.uf;
+      renderTabela();
+      document.querySelector('.tab[data-tab="acervo"]').click();
+    });
+
+    const label = document.createElementNS("http://www.w3.org/2000/svg","text");
+    label.setAttribute("x", x); label.setAttribute("y", y+1);
+    label.setAttribute("text-anchor","middle");
+    label.setAttribute("class","hex-label");
+    label.textContent = e.uf;
+
+    const countLabel = document.createElementNS("http://www.w3.org/2000/svg","text");
+    countLabel.setAttribute("x", x); countLabel.setAttribute("y", y+11);
+    countLabel.setAttribute("text-anchor","middle");
+    countLabel.setAttribute("class","hex-count");
+    countLabel.textContent = n > 0 ? n : "";
+
+    mapaSvg.appendChild(poly);
+    mapaSvg.appendChild(label);
+    mapaSvg.appendChild(countLabel);
+  });
+}
+
+/* ============================================================
+   PAINEL — gráfico de barras por ano (Chart.js)
+   ============================================================ */
+function renderChartAno(){
+  const contagem = {};
+  allRecords.forEach(r => contagem[r.ano] = (contagem[r.ano]||0)+1);
+  const anos = Object.keys(contagem).map(Number).sort((a,b)=>a-b);
+  const valores = anos.map(a => contagem[a]);
+
+  const ctx = document.getElementById("chart-ano").getContext("2d");
+  if(chartAno) chartAno.destroy();
+  chartAno = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: anos,
+      datasets: [{
+        label: "Discos",
+        data: valores,
+        backgroundColor: "#f2b705",
+        borderRadius: 3,
+        maxBarThickness: 34,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display:false } },
+      scales: {
+        x: { ticks:{ color:"#8f8b80", font:{family:"Space Mono", size:10} }, grid:{ display:false } },
+        y: { beginAtZero:true, ticks:{ color:"#8f8b80", stepSize:1, font:{family:"Space Mono", size:10} }, grid:{ color:"#2c2b27" } }
+      }
+    }
+  });
+}
+
+/* ============================================================
+   CARREGAMENTO GERAL
+   ============================================================ */
+async function carregarTudo(){
+  if(!supabase){
+    allRecords = [];
+    renderTudo();
+    return;
+  }
+  const { data, error } = await supabase.from(TABLE).select("*").order("created_at", {ascending:false});
+  if(error){
+    console.error(error);
+    return;
+  }
+  allRecords = data || [];
+  renderTudo();
+}
+
+function renderTudo(){
+  popularFiltroAno();
+  popularCidades();
+  renderTabela();
+  renderStats();
+  renderMapa();
+  renderChartAno();
+}
+
+/* ============================================================
+   START
+   ============================================================ */
+popularSelectsDeEstado();
+carregarTudo();
+</script>
+</body>
+</html>
