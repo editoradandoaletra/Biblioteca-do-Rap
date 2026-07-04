@@ -390,12 +390,15 @@ const SUPABASE_URL = "https://ypfdwtldyyphiqdqdjhu.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_-7MsiUQpjCqK0r5cgU7Xlg_jgjrkObh";
 const TABLE = "discos";
 
-const supabase = (SUPABASE_URL.startsWith("http"))
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-  : null;
-
-if(!supabase){
-  console.warn("Supabase não configurado. Edite SUPABASE_URL e SUPABASE_ANON_KEY no <script> do index.html.");
+let supabaseClient = null;
+try{
+  if(SUPABASE_URL.startsWith("http") && window.supabase){
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } else {
+    console.warn("Supabase não configurado ou biblioteca não carregou. Edite SUPABASE_URL/SUPABASE_ANON_KEY, ou confira se o CDN do supabase-js não está bloqueado.");
+  }
+}catch(err){
+  console.error("Falha ao iniciar o Supabase (o resto do site continua funcionando):", err);
 }
 
 /* ============================================================
@@ -576,7 +579,7 @@ async function salvarDisco(record){
   btnSubmit.disabled = true;
   btnSubmit.textContent = "CADASTRANDO...";
 
-  if(!supabase){
+  if(!supabaseClient){
     formMsg.textContent = "Supabase não configurado — veja o comentário no topo do <script>.";
     formMsg.className = "err";
     btnSubmit.disabled = false;
@@ -584,7 +587,7 @@ async function salvarDisco(record){
     return;
   }
 
-  const { error } = await supabase.from(TABLE).insert([record]);
+  const { error } = await supabaseClient.from(TABLE).insert([record]);
 
   btnSubmit.disabled = false;
   btnSubmit.textContent = "Cadastrar Disco";
@@ -815,6 +818,10 @@ function renderMapa(){
    PAINEL — gráfico de barras por ano (Chart.js)
    ============================================================ */
 function renderChartAno(){
+  if(typeof Chart === "undefined"){
+    console.warn("Chart.js não carregou (CDN bloqueado?). O gráfico de barras não vai aparecer, mas o resto do site funciona normalmente.");
+    return;
+  }
   const contagem = {};
   allRecords.forEach(r => contagem[r.ano] = (contagem[r.ano]||0)+1);
   const anos = Object.keys(contagem).map(Number).sort((a,b)=>a-b);
@@ -849,27 +856,32 @@ function renderChartAno(){
    CARREGAMENTO GERAL
    ============================================================ */
 async function carregarTudo(){
-  if(!supabase){
+  if(!supabaseClient){
     allRecords = [];
     renderTudo();
     return;
   }
-  const { data, error } = await supabase.from(TABLE).select("*").order("created_at", {ascending:false});
-  if(error){
-    console.error(error);
-    return;
+  try{
+    const { data, error } = await supabaseClient.from(TABLE).select("*").order("created_at", {ascending:false});
+    if(error){
+      console.error("Erro ao carregar discos:", error);
+      allRecords = [];
+    } else {
+      allRecords = data || [];
+    }
+  }catch(err){
+    console.error("Falha de rede ao carregar discos:", err);
+    allRecords = [];
   }
-  allRecords = data || [];
   renderTudo();
 }
 
 function renderTudo(){
-  popularFiltroAno();
-  popularCidades();
-  renderTabela();
-  renderStats();
-  renderMapa();
-  renderChartAno();
+  const passos = [popularFiltroAno, popularCidades, renderTabela, renderStats, renderMapa, renderChartAno];
+  passos.forEach(passo => {
+    try{ passo(); }
+    catch(err){ console.error(`Falha ao rodar ${passo.name} (o resto do site continua funcionando):`, err); }
+  });
 }
 
 /* ============================================================
