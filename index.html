@@ -230,6 +230,8 @@ tbody tr:last-child td{ border-bottom:none; }
 }
 
 footer{ border-top:1px solid var(--border); padding:26px 20px; text-align:center; color:var(--grey-dim); font-family:var(--mono); font-size:11px; letter-spacing:.05em; }
+.footer-correcao{ margin-top:10px; color:var(--grey); font-size:11px; letter-spacing:normal; max-width:640px; margin-left:auto; margin-right:auto; line-height:1.6; }
+.footer-correcao a{ color:var(--gold); text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -277,28 +279,28 @@ footer{ border-top:1px solid var(--border); padding:26px 20px; text-align:center
         </div>
         <div class="field">
           <label>03 · Produtor</label>
-          <input type="text" id="f-produtor" placeholder="EX: KL JAY" required>
+          <input type="text" id="f-produtor" placeholder="EX: KL JAY">
         </div>
         <div class="field-row">
           <div class="field">
             <label>04 · Ano</label>
-            <input type="number" id="f-ano" min="1970" max="2026" placeholder="1997" required>
+            <input type="number" id="f-ano" min="1970" max="2026" placeholder="1997">
           </div>
           <div class="field">
             <label>05 · Estado</label>
-            <select id="f-estado" required>
-              <option value="" disabled selected>SELECIONE</option>
+            <select id="f-estado">
+              <option value="" selected>SELECIONE</option>
             </select>
           </div>
         </div>
         <div class="field">
           <label>06 · Cidade</label>
-          <input type="text" id="f-cidade" list="cidades-list" placeholder="EX: SÃO PAULO" required autocomplete="off">
+          <input type="text" id="f-cidade" list="cidades-list" placeholder="EX: SÃO PAULO" autocomplete="off">
           <datalist id="cidades-list"></datalist>
         </div>
         <div class="field">
           <label>07 · Link do YouTube</label>
-          <input type="url" id="f-youtube" placeholder="https://www.youtube.com/watch?v=..." required>
+          <input type="url" id="f-youtube" placeholder="https://www.youtube.com/watch?v=...">
           <div id="yt-preview"><img id="yt-thumb" src="" alt=""><span id="yt-status">VÍDEO ENCONTRADO</span></div>
         </div>
         <button type="submit" class="btn-primary" id="btn-submit">Cadastrar Disco</button>
@@ -356,6 +358,7 @@ footer{ border-top:1px solid var(--border); padding:26px 20px; text-align:center
         <h3>Discos por Estado — Mapa de Calor</h3>
         <svg id="mapa-brasil" viewBox="0 0 640 620"></svg>
         <div class="legend"><span>0</span><div class="legend-bar"></div><span id="legend-max">MAX</span></div>
+        <p id="badge-sem-estado" style="display:none; font-family:var(--mono); font-size:11px; color:var(--grey); background:var(--bg-card-alt); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; margin-top:10px;"></p>
         <div class="tooltip hidden" id="mapa-tooltip"></div>
       </div>
       <div class="card chart-card">
@@ -368,7 +371,12 @@ footer{ border-top:1px solid var(--border); padding:26px 20px; text-align:center
 </main>
 
 <footer>
-  BIBLIOTECA DO RAP — ACERVO COLABORATIVO MANTIDO PELA COMUNIDADE · DADOS ABERTOS PARA PESQUISA
+  <div>BIBLIOTECA DO RAP — ACERVO COLABORATIVO MANTIDO PELA COMUNIDADE · DADOS ABERTOS PARA PESQUISA</div>
+  <div class="footer-correcao">
+    Encontrou algum dado incorreto ou incompleto? Escreva para
+    <a href="mailto:editoradandoaletra@gmail.com">editoradandoaletra@gmail.com</a>
+    contando o que viu — cada correção deixa esse acervo mais confiável pra quem pesquisa o rap brasileiro.
+  </div>
 </footer>
 
 <!-- ===== modal de possível duplicata ===== -->
@@ -530,31 +538,44 @@ form.addEventListener("submit", async (e)=>{
   e.preventDefault();
   formMsg.textContent = ""; formMsg.className = "";
 
-  const youtubeUrl = document.getElementById("f-youtube").value.trim();
-  const youtubeId = getYoutubeId(youtubeUrl);
-  if(!youtubeId){
-    inputYoutube.classList.add("invalid");
-    formMsg.textContent = "Cola um link válido do YouTube (watch, youtu.be ou shorts).";
+  const albumNorm = normalize(document.getElementById("f-album").value);
+  const artistaNorm = normalize(document.getElementById("f-artista").value);
+  if(!albumNorm || !artistaNorm){
+    formMsg.textContent = "Nome do Álbum e Artista são obrigatórios — o resto pode ficar em branco se você não souber.";
     formMsg.className = "err";
     return;
   }
 
+  // youtube só é validado SE algo foi preenchido; em branco é permitido
+  const youtubeUrlRaw = document.getElementById("f-youtube").value.trim();
+  let youtubeId = null, youtubeUrl = null;
+  if(youtubeUrlRaw){
+    youtubeId = getYoutubeId(youtubeUrlRaw);
+    if(!youtubeId){
+      inputYoutube.classList.add("invalid");
+      formMsg.textContent = "Esse link do YouTube não parece válido — corrige ou deixa o campo em branco.";
+      formMsg.className = "err";
+      return;
+    }
+    youtubeUrl = youtubeUrlRaw;
+  }
+
+  const produtorNorm = normalize(document.getElementById("f-produtor").value);
+  const cidadeNorm = normalize(document.getElementById("f-cidade").value);
+  const estadoVal = document.getElementById("f-estado").value;
+  const anoRaw = document.getElementById("f-ano").value;
+  const anoNum = anoRaw ? parseInt(anoRaw, 10) : NaN;
+
   const record = {
-    album:    normalize(document.getElementById("f-album").value),
-    artista:  normalize(document.getElementById("f-artista").value),
-    produtor: normalize(document.getElementById("f-produtor").value),
-    ano:      parseInt(document.getElementById("f-ano").value, 10),
-    cidade:   normalize(document.getElementById("f-cidade").value),
-    estado:   document.getElementById("f-estado").value,
+    album:    albumNorm,
+    artista:  artistaNorm,
+    produtor: produtorNorm || null,
+    ano:      Number.isFinite(anoNum) ? anoNum : null,
+    cidade:   cidadeNorm || null,
+    estado:   estadoVal || null,
     youtube_id: youtubeId,
     youtube_url: youtubeUrl,
   };
-
-  if(!record.album || !record.artista || !record.produtor || !record.cidade || !record.estado || !record.ano){
-    formMsg.textContent = "Preenche todos os campos antes de cadastrar.";
-    formMsg.className = "err";
-    return;
-  }
 
   const duplicatas = encontrarPossiveisDuplicatas(record);
   if(duplicatas.length){
@@ -624,7 +645,7 @@ document.getElementById("dup-confirm").addEventListener("click", async ()=>{
 });
 function abrirModalDuplicatas(lista){
   dupList.innerHTML = lista.map(r => `
-    <li>${r.album} <span>${r.artista} · ${r.ano} · ${r.cidade}/${r.estado}</span></li>
+    <li>${r.album} <span>${r.artista} · ${r.ano || "ano ?"} · ${r.cidade || "cidade ?"}/${r.estado || "?"}</span></li>
   `).join("");
   modalDup.classList.remove("hidden");
 }
@@ -667,11 +688,11 @@ function exportarExcel(){
   const linhas = dadosFiltradosAtual.map(r => ({
     "Álbum": r.album,
     "Artista": r.artista,
-    "Produtor": r.produtor,
-    "Ano": r.ano,
-    "Cidade": r.cidade,
-    "Estado": r.estado,
-    "Link do YouTube": r.youtube_url,
+    "Produtor": r.produtor || "",
+    "Ano": r.ano || "",
+    "Cidade": r.cidade || "",
+    "Estado": r.estado || "",
+    "Link do YouTube": r.youtube_url || "",
     "Cadastrado em": r.created_at ? new Date(r.created_at).toLocaleDateString("pt-BR") : "",
   }));
   const planilha = XLSX.utils.json_to_sheet(linhas);
@@ -694,7 +715,7 @@ document.querySelectorAll("#tabela-acervo thead th[data-key]").forEach(th=>{
 });
 
 function popularFiltroAno(){
-  const anos = [...new Set(allRecords.map(r=>r.ano))].sort((a,b)=>b-a);
+  const anos = [...new Set(allRecords.map(r=>r.ano).filter(a => a !== null && a !== undefined))].sort((a,b)=>b-a);
   filtroAno.innerHTML = `<option value="">TODOS OS ANOS</option>` + anos.map(a=>`<option value="${a}">${a}</option>`).join("");
 }
 
@@ -726,10 +747,10 @@ function renderTabela(){
       <tr>
         <td class="cell-album">${r.album}</td>
         <td>${r.artista}</td>
-        <td>${r.produtor}</td>
-        <td>${r.ano}</td>
-        <td>${r.cidade} <span class="tag-uf">${r.estado}</span></td>
-        <td><a class="yt-link" href="${r.youtube_url}" target="_blank" rel="noopener">▶ ASSISTIR</a></td>
+        <td>${r.produtor || "—"}</td>
+        <td>${r.ano || "—"}</td>
+        <td>${r.cidade || "—"} ${r.estado ? `<span class="tag-uf">${r.estado}</span>` : `<span class="tag-uf" style="opacity:.5;">—</span>`}</td>
+        <td>${r.youtube_url ? `<a class="yt-link" href="${r.youtube_url}" target="_blank" rel="noopener">▶ ASSISTIR</a>` : "—"}</td>
       </tr>
     `).join("");
   }
@@ -741,7 +762,7 @@ function renderTabela(){
    ============================================================ */
 function popularCidades(){
   const dl = document.getElementById("cidades-list");
-  const cidades = [...new Set(allRecords.map(r=>r.cidade))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  const cidades = [...new Set(allRecords.map(r=>r.cidade).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
   dl.innerHTML = cidades.map(c=>`<option value="${c}">`).join("");
 }
 
@@ -751,11 +772,12 @@ function popularCidades(){
 function renderStats(){
   const total = allRecords.length;
   const artistas = new Set(allRecords.map(r=>r.artista)).size;
-  const estados = new Set(allRecords.map(r=>r.estado)).size;
+  const estados = new Set(allRecords.map(r=>r.estado).filter(Boolean)).size;
 
   const contagemCidade = {};
   allRecords.forEach(r=>{
-    const chave = `${r.cidade}/${r.estado}`;
+    if(!r.cidade) return;
+    const chave = r.estado ? `${r.cidade}/${r.estado}` : r.cidade;
     contagemCidade[chave] = (contagemCidade[chave]||0)+1;
   });
   let cidadeTop = "—";
@@ -822,9 +844,23 @@ function corPorContagem(n, max){
 function renderMapa(){
   const contagem = {};
   Object.keys(BR_MAPA).forEach(uf => contagem[uf] = 0);
-  allRecords.forEach(r => { if(contagem[r.estado] !== undefined) contagem[r.estado]++; });
+  let semEstado = 0;
+  allRecords.forEach(r => {
+    if(!r.estado){ semEstado++; return; }
+    if(contagem[r.estado] !== undefined) contagem[r.estado]++;
+  });
   const max = Math.max(0, ...Object.values(contagem));
   document.getElementById("legend-max").textContent = max;
+
+  const badgeSemEstado = document.getElementById("badge-sem-estado");
+  if(badgeSemEstado){
+    if(semEstado > 0){
+      badgeSemEstado.textContent = `+ ${semEstado} disco${semEstado===1?"":"s"} sem estado informado (não aparece${semEstado===1?"":"m"} no mapa)`;
+      badgeSemEstado.style.display = "block";
+    } else {
+      badgeSemEstado.style.display = "none";
+    }
+  }
 
   mapaSvg.innerHTML = "";
   Object.entries(BR_MAPA).forEach(([uf, e])=>{
@@ -877,7 +913,7 @@ function renderChartAno(){
     return;
   }
   const contagem = {};
-  allRecords.forEach(r => contagem[r.ano] = (contagem[r.ano]||0)+1);
+  allRecords.forEach(r => { if(r.ano) contagem[r.ano] = (contagem[r.ano]||0)+1; });
   const anos = Object.keys(contagem).map(Number).sort((a,b)=>a-b);
   const valores = anos.map(a => contagem[a]);
 
